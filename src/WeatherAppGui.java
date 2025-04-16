@@ -1,6 +1,8 @@
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import javax.imageio.ImageIO;
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -10,11 +12,12 @@ import java.io.IOException;
 
 public class WeatherAppGui extends JFrame {
     private JSONObject weatherData;
+    private JPanel forecastPanel;
 
     public WeatherAppGui() {
         super("Weather App");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(450, 650);
+        setSize(450, 780); // Increased height to accommodate forecast
         setLocationRelativeTo(null);
         setLayout(null);
         setResizable(false);
@@ -61,6 +64,23 @@ public class WeatherAppGui extends JFrame {
         windspeedText.setFont(new Font("Dialog", Font.PLAIN, 16));
         add(windspeedText);
 
+        // Add forecast section title
+        JLabel forecastTitle = new JLabel("3-Day Forecast");
+        forecastTitle.setBounds(0, 565, 450, 30);
+        forecastTitle.setFont(new Font("Dialog", Font.BOLD, 20));
+        forecastTitle.setHorizontalAlignment(SwingConstants.CENTER);
+        add(forecastTitle);
+
+        // Add forecast panel to hold the forecast days
+        forecastPanel = new JPanel();
+        forecastPanel.setBounds(15, 600, 420, 130);
+        forecastPanel.setLayout(new GridLayout(1, 3, 10, 0));
+        forecastPanel.setOpaque(false);
+        add(forecastPanel);
+
+        // Initialize with empty forecast panels
+        setupEmptyForecastPanels();
+
         JButton searchButton = new JButton(loadImage("src/assets/search.png"));
         searchButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         searchButton.setBounds(375, 13, 47, 45);
@@ -93,7 +113,7 @@ public class WeatherAppGui extends JFrame {
                     }
                 
                 } catch (Exception ex) {
-                    String message = ex.getMessage().toLowerCase();
+                    String message = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
                     if (message.contains("unknownhost") || message.contains("unresolved address")) {
                         JOptionPane.showMessageDialog(
                             WeatherAppGui.this,
@@ -139,9 +159,126 @@ public class WeatherAppGui extends JFrame {
 
                 double windspeed = (double) weatherData.get("windspeed");
                 windspeedText.setText("<html><b>Windspeed</b> " + windspeed + "km/h</html>");
+                
+                // Update forecast
+                updateForecastDisplay();
             }
         });
         add(searchButton);
+    }
+    
+    private void setupEmptyForecastPanels() {
+        forecastPanel.removeAll();
+        
+        for (int i = 0; i < 3; i++) {
+            JPanel dayPanel = createForecastDayPanel("---", "---", "---", "Cloudy");
+            forecastPanel.add(dayPanel);
+        }
+        
+        forecastPanel.revalidate();
+        forecastPanel.repaint();
+    }
+    
+    private void updateForecastDisplay() {
+        if (weatherData == null || !weatherData.containsKey("forecast")) {
+            setupEmptyForecastPanels();
+            return;
+        }
+        
+        forecastPanel.removeAll();
+        
+        try {
+            JSONObject forecast = (JSONObject) weatherData.get("forecast");
+            JSONArray days = (JSONArray) forecast.get("days");
+            
+            for (int i = 0; i < days.size(); i++) {
+                JSONObject dayForecast = (JSONObject) days.get(i);
+                
+                String day = (String) dayForecast.get("day");
+                double maxTemp = ((Number) dayForecast.get("max_temp")).doubleValue();
+                double minTemp = ((Number) dayForecast.get("min_temp")).doubleValue();
+                String condition = (String) dayForecast.get("condition");
+                
+                JPanel dayPanel = createForecastDayPanel(
+                    day, 
+                    String.format("%.1f", maxTemp),
+                    String.format("%.1f", minTemp),
+                    condition
+                );
+                
+                forecastPanel.add(dayPanel);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            setupEmptyForecastPanels();
+        }
+        
+        forecastPanel.revalidate();
+        forecastPanel.repaint();
+    }
+    
+    private JPanel createForecastDayPanel(String day, String maxTemp, String minTemp, String condition) {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BorderLayout(5, 5));
+        panel.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200), 1, true));
+        panel.setBackground(new Color(240, 240, 240));
+        
+        // Day label
+        JLabel dayLabel = new JLabel(day);
+        dayLabel.setFont(new Font("Dialog", Font.BOLD, 16));
+        dayLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        dayLabel.setBorder(new EmptyBorder(5, 0, 0, 0));
+        panel.add(dayLabel, BorderLayout.NORTH);
+        
+        // Weather icon
+        JLabel iconLabel = new JLabel();
+        iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        String iconPath = "src/assets/cloudy.png"; // Default
+        
+        switch (condition) {
+            case "Clear":
+                iconPath = "src/assets/clear.png";
+                break;
+            case "Cloudy":
+                iconPath = "src/assets/cloudy.png";
+                break;
+            case "Rain":
+                iconPath = "src/assets/rain.png";
+                break;
+            case "Snow":
+                iconPath = "src/assets/snow.png";
+                break;
+        }
+        
+        ImageIcon originalIcon = loadImage(iconPath);
+        if (originalIcon != null) {
+            // Scale down the icon for the forecast panel
+            Image img = originalIcon.getImage().getScaledInstance(40, 40, Image.SCALE_SMOOTH);
+            iconLabel.setIcon(new ImageIcon(img));
+        }
+        
+        panel.add(iconLabel, BorderLayout.CENTER);
+        
+        // Temperature panel (min/max)
+        JPanel tempPanel = new JPanel();
+        tempPanel.setLayout(new GridLayout(2, 1));
+        tempPanel.setOpaque(false);
+        
+        JLabel maxTempLabel = new JLabel("H: " + maxTemp + " C");
+        maxTempLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        maxTempLabel.setFont(new Font("Dialog", Font.PLAIN, 12));
+        
+        JLabel minTempLabel = new JLabel("L: " + minTemp + " C");
+        minTempLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        minTempLabel.setFont(new Font("Dialog", Font.PLAIN, 12));
+        
+        tempPanel.add(maxTempLabel);
+        tempPanel.add(minTempLabel);
+        tempPanel.setBorder(new EmptyBorder(0, 0, 5, 0));
+        
+        panel.add(tempPanel, BorderLayout.SOUTH);
+        
+        return panel;
     }
 
     private ImageIcon loadImage(String resourcePath) {

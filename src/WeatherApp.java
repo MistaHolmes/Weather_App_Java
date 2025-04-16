@@ -7,9 +7,11 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 
-// retreive weather data from API - this backend logic will fetch the latest weather
+// retrieve weather data from API - this backend logic will fetch the latest weather
 // data from the external API and return it. The GUI will
 // display this data to the user
 public class WeatherApp {
@@ -26,7 +28,9 @@ public class WeatherApp {
         // build API request URL with location coordinates
         String urlString = "https://api.open-meteo.com/v1/forecast?" +
                 "latitude=" + latitude + "&longitude=" + longitude +
-                "&hourly=temperature_2m,relativehumidity_2m,weathercode,windspeed_10m&timezone=America%2FLos_Angeles";
+                "&hourly=temperature_2m,relativehumidity_2m,weathercode,windspeed_10m" +
+                "&daily=weathercode,temperature_2m_max,temperature_2m_min" +
+                "&timezone=America%2FLos_Angeles";
 
         try{
             // call api and get response
@@ -88,12 +92,72 @@ public class WeatherApp {
             weatherData.put("humidity", humidity);
             weatherData.put("windspeed", windspeed);
 
+            // Get forecast data for next 3 days
+            JSONObject forecastData = getForecastData(resultJsonObj);
+            weatherData.put("forecast", forecastData);
+
             return weatherData;
         }catch(Exception e){
             e.printStackTrace();
         }
 
         return null;
+    }
+
+    // Process forecast data for the next 3 days
+    private static JSONObject getForecastData(JSONObject apiData) {
+        try {
+            JSONObject daily = (JSONObject) apiData.get("daily");
+            
+            // Get dates, max temps, min temps, and weather codes
+            JSONArray dates = (JSONArray) daily.get("time");
+            JSONArray maxTemps = (JSONArray) daily.get("temperature_2m_max");
+            JSONArray minTemps = (JSONArray) daily.get("temperature_2m_min");
+            JSONArray weatherCodes = (JSONArray) daily.get("weathercode");
+            
+            // Create forecast object with data for next 3 days
+            JSONObject forecast = new JSONObject();
+            JSONArray forecastDays = new JSONArray();
+            
+            // Start from index 1 (tomorrow) and get 3 days
+            for (int i = 1; i <= 3; i++) {
+                if (i < dates.size()) {
+                    JSONObject dayForecast = new JSONObject();
+                    
+                    // Extract the day name from the date
+                    String dateStr = (String) dates.get(i);
+                    String dayName = getDayOfWeekFromDate(dateStr);
+                    
+                    dayForecast.put("day", dayName);
+                    dayForecast.put("max_temp", maxTemps.get(i));
+                    dayForecast.put("min_temp", minTemps.get(i));
+                    
+                    long code = (long) weatherCodes.get(i);
+                    String condition = convertWeatherCode(code);
+                    dayForecast.put("condition", condition);
+                    
+                    forecastDays.add(dayForecast);
+                }
+            }
+            
+            forecast.put("days", forecastDays);
+            return forecast;
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    
+    // Helper to get day name from date string
+    private static String getDayOfWeekFromDate(String dateString) {
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            LocalDateTime date = LocalDateTime.parse(dateString + "T00:00");
+            return date.getDayOfWeek().toString().substring(0, 3);
+        } catch (Exception e) {
+            return dateString; // If parsing fails, return the original string
+        }
     }
 
     // retrieves geographic coordinates for given location name
@@ -182,7 +246,7 @@ public class WeatherApp {
         return 0;
     }
 
-    private static String getCurrentTime(){
+    public static String getCurrentTime(){
         // get current date and time
         LocalDateTime currentDateTime = LocalDateTime.now();
 
@@ -216,10 +280,3 @@ public class WeatherApp {
         return weatherCondition;
     }
 }
-
-
-
-
-
-
-
